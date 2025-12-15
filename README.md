@@ -203,7 +203,7 @@ Arguments:
 - **Storage**: ~1MB per 100 chunks (embeddings + metadata)
 - **Memory Usage**: ~2GB for embedding model + document chunks
 
-## 🚨 Troubleshooting
+## Troubleshooting
 
 ### NumPy Version Error
 ```bash
