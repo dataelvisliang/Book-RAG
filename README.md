@@ -203,30 +203,6 @@ Arguments:
 - **Storage**: ~1MB per 100 chunks (embeddings + metadata)
 - **Memory Usage**: ~2GB for embedding model + document chunks
 
-## Troubleshooting
-
-### NumPy Version Error
-```bash
-pip install "numpy<2"
-```
-
-### Python 3.14 Compatibility
-Use Python 3.12 instead:
-```bash
-python3.12 -m pip install -r requirements.txt
-python3.12 -m streamlit run app.py
-```
-
-### Encoding Errors
-The system automatically handles Unicode encoding issues. Check logs for details on skipped chunks.
-
-### ChromaDB Errors
-Delete and rebuild the database:
-```bash
-rm -rf chroma_db/
-python3.12 preprocess_pdf.py
-```
-
 ## 🎯 Roadmap
 
 - [ ] Add reranking step for better retrieval accuracy
