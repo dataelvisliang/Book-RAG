@@ -30,16 +30,10 @@ with st.sidebar:
     # OpenRouter API
     st.markdown("### 🤖 OpenRouter API")
     openrouter_api_key = st.text_input("API Key", type="password", key="openrouter_key")
-    openrouter_model = st.selectbox(
+    openrouter_model = st.text_input(
         "Model",
-        [
-            "anthropic/claude-3.5-sonnet",
-            "openai/gpt-4-turbo",
-            "openai/gpt-4o",
-            "google/gemini-pro-1.5",
-            "meta-llama/llama-3.1-70b-instruct"
-        ],
-        index=0
+        value="nvidia/nemotron-3-nano-30b-a3b:free",
+        help="Enter the OpenRouter model name (e.g., nvidia/nemotron-3-nano-30b-a3b:free, openai/gpt-4o-2024-11-20, anthropic/claude-3.5-sonnet)"
     )
 
     st.markdown("---")

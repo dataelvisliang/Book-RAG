@@ -28,7 +28,6 @@ wheels/
 .env.local
 
 # Database
-chroma_db/
 *.db
 
 # Logs

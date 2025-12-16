@@ -4,6 +4,7 @@ RAG Backend - Handles PDF processing, embeddings, and retrieval
 
 import os
 import tempfile
+import logging
 from pypdf import PdfReader
 from sentence_transformers import SentenceTransformer
 import chromadb
@@ -25,12 +26,12 @@ class RAGBackend:
         self.persist_directory = persist_directory
         self.embedding_model_name = embedding_model_name
 
-        # Initialize ChromaDB client
+        # Initialize ChromaDB client with persistence
         os.makedirs(persist_directory, exist_ok=True)
-        self.client = chromadb.Client(Settings(
-            persist_directory=persist_directory,
-            anonymized_telemetry=False
-        ))
+        self.client = chromadb.PersistentClient(
+            path=persist_directory,
+            settings=Settings(anonymized_telemetry=False)
+        )
 
         # Load embedding model
         self.embedding_model = SentenceTransformer(embedding_model_name)
@@ -72,30 +73,38 @@ class RAGBackend:
 
     def clean_text(self, text):
         """Clean and normalize text for processing.
-        
+
         Args:
             text: Input text to clean
-            
+
         Returns:
             Cleaned and normalized text
         """
         import re
         import unicodedata
-        
+
         if not isinstance(text, str):
             text = str(text)
-            
+
+        # Remove surrogate characters (unpaired Unicode surrogates like \ud835)
+        # These are often from mathematical symbols or special characters
+        text = ''.join(char for char in text if not (0xD800 <= ord(char) <= 0xDFFF))
+
         # Normalize unicode characters
-        text = unicodedata.normalize('NFKC', text)
-        
+        try:
+            text = unicodedata.normalize('NFKC', text)
+        except ValueError:
+            # If normalization fails, try encoding/decoding to clean
+            text = text.encode('utf-8', errors='ignore').decode('utf-8', errors='ignore')
+
         # Replace problematic unicode quotes and dashes
         text = text.replace('"', '"').replace('"', '"')
         text = text.replace('\u2018', "'").replace('\u2019', "'")
         text = text.replace('\u2013', '-').replace('\u2014', '-')
-        
+
         # Remove other problematic characters
         text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]', '', text)
-        
+
         return text.strip()
 
     def chunk_text(self, text, chunk_size=500, overlap=50):
@@ -213,7 +222,7 @@ class RAGBackend:
                             if clean_chunk:  # Only keep non-empty chunks
                                 cleaned_chunks.append(clean_chunk)
                         except Exception as e:
-                            print(f"Warning: Error cleaning chunk {i}: {str(e)}")
+                            logging.warning(f"Error cleaning chunk {i}: {str(e)}")
                             continue
                     
                     if not cleaned_chunks:
@@ -230,7 +239,7 @@ class RAGBackend:
                         validated_batch = []
                         for idx, chunk in enumerate(batch):
                             if not isinstance(chunk, str):
-                                print(f"Warning: chunk {i+idx} is not a string, type: {type(chunk)}")
+                                logging.warning(f"Chunk {i+idx} is not a string, type: {type(chunk)}")
                                 chunk = str(chunk)
                             # Ensure it's ASCII-compatible or properly encoded
                             try:
@@ -238,7 +247,7 @@ class RAGBackend:
                                 chunk.encode('utf-8').decode('utf-8')
                                 validated_batch.append(chunk)
                             except Exception as e:
-                                print(f"Warning: chunk {i+idx} has encoding issues: {str(e)[:100]}")
+                                logging.debug(f"Chunk {i+idx} has encoding issues: {str(e)[:100]}")
                                 # Try to clean it more aggressively
                                 cleaned = chunk.encode('utf-8', errors='ignore').decode('utf-8', errors='ignore')
                                 if cleaned.strip():
@@ -258,13 +267,13 @@ class RAGBackend:
                             )
                             all_embeddings.extend(batch_embeddings.tolist())
                         except Exception as e:
-                            print(f"Error in batch {i//batch_size}: {str(e)}")
+                            logging.warning(f"Error in batch {i//batch_size}: {str(e)}")
                             # Try processing individual chunks in the batch
                             for j, chunk in enumerate(validated_batch):
                                 try:
                                     # Verify chunk is valid string
                                     if not chunk or not chunk.strip():
-                                        print(f"Skipping empty chunk {i+j}")
+                                        logging.debug(f"Skipping empty chunk {i+j}")
                                         continue
 
                                     chunk_embedding = self.embedding_model.encode(
@@ -275,8 +284,8 @@ class RAGBackend:
                                     )
                                     all_embeddings.append(chunk_embedding.tolist())
                                 except Exception as chunk_error:
-                                    print(f"Error processing chunk {i+j}: {str(chunk_error)}")
-                                    print(f"Chunk preview: {repr(chunk[:100])}")
+                                    logging.warning(f"Error processing chunk {i+j}: {str(chunk_error)}")
+                                    logging.debug(f"Chunk preview: {repr(chunk[:100])}")
                     
                     if not all_embeddings:
                         raise ValueError("Failed to generate any embeddings")
