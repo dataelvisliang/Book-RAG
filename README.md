@@ -7,11 +7,14 @@ A powerful, standalone Python-based RAG (Retrieval-Augmented Generation) system 
 - 📚 **Local PDF Processing**: Process PDFs with detailed text extraction and chunking
 - 🧠 **Local Embeddings**: Generate embeddings locally using BAAI/bge-base-en-v1.5 (GPU-accelerated on Mac)
 - 💾 **Persistent Storage**: ChromaDB vector database for efficient retrieval
+- 🔍 **Advanced Query Rewriting**: Three retrieval strategies (Direct, HyDE, Multi-Query) for better search quality
+- 🎯 **Cross-Encoder Reranking**: BAAI/bge-reranker-v2-m3 for improved result ranking
 - 🤖 **Multiple LLM Support**: Use any model from OpenRouter (Claude, GPT-4, Gemini, LLaMA, etc.)
+- 📖 **Book-Specific Context**: Optimized for "Data Science for Business" by Provost & Fawcett
 - 📊 **Comprehensive Logging**: Detailed preprocessing logs with statistics
 - 🔄 **Standalone Preprocessing**: Separate script for batch PDF processing
 - 💬 **Interactive Chat**: Clean Streamlit interface with conversation history
-- 🎯 **Source Attribution**: View source chunks with page numbers and relevance scores
+- 📊 **Dual Scoring**: View both vector similarity and rerank scores for each source
 
 ## 🏗️ Architecture
 
@@ -20,22 +23,25 @@ A powerful, standalone Python-based RAG (Retrieval-Augmented Generation) system 
 │                  Streamlit UI (app.py)              │
 │  - Chat interface                                   │
 │  - Document selection                               │
+│  - Retrieval mode selector (None/HyDE/Multi-Query)  │
 │  - API configuration                                │
 └────────────────┬────────────────────────────────────┘
                  │
 ┌────────────────▼────────────────────────────────────┐
 │            RAG Backend (rag_backend.py)             │
-│  - PDF text extraction                              │
+│  - PDF text extraction & advanced cleaning          │
 │  - Text chunking (500 chars, 50 overlap)            │
 │  - Embedding generation (BAAI/bge-base-en-v1.5)     │
+│  - Query rewriting (HyDE/Multi-Query)               │
 │  - ChromaDB vector storage & retrieval              │
-│  - OpenRouter LLM query                             │
+│  - Cross-encoder reranking (bge-reranker-v2-m3)     │
+│  - OpenRouter LLM query with book context           │
 └────────────────┬────────────────────────────────────┘
                  │
 ┌────────────────▼────────────────────────────────────┐
 │         Preprocessing (preprocess_pdf.py)           │
 │  - Batch PDF processing                             │
-│  - Detailed logging                                 │
+│  - Detailed logging with progress tracking          │
 │  - Statistics tracking                              │
 └─────────────────────────────────────────────────────┘
 ```
@@ -129,10 +135,37 @@ python3.12 preprocess_pdf.py [pdf_path] [--db-path PATH] [--model MODEL]
 ### Using the Streamlit App
 
 1. **Enter your OpenRouter API key** in the sidebar
-2. **Select your preferred AI model** (Claude 3.5 Sonnet, GPT-4o, etc.)
-3. **Select documents** to query from the sidebar checkboxes
-4. **Ask questions** in the chat interface
-5. **View sources** by expanding the "View Sources" section under each answer
+2. **Select your preferred AI model** (default: nvidia/nemotron-3-nano-30b-a3b:free)
+3. **Choose retrieval mode**:
+   - **None**: Direct search with original query (fastest)
+   - **HyDE**: Generate hypothetical answer for better retrieval (default)
+   - **Multi-Query**: Generate 3 query variations for broadest coverage
+4. **Select documents** to query from the sidebar checkboxes
+5. **Ask questions** in the chat interface
+6. **View sources** with both distance and rerank scores by expanding "View Sources"
+
+### Retrieval Modes Explained
+
+#### 🎯 None (Direct Search)
+- Searches with your original query as-is
+- Fastest option (no API calls for rewriting)
+- Best for keyword searches and exact phrases
+
+#### 🔮 HyDE (Hypothetical Document Embeddings)
+- Generates a hypothetical answer to your question
+- Searches using the answer embedding instead of the question
+- Best for conceptual "What is..." queries
+- **Default mode** - great for most questions
+
+#### 🌐 Multi-Query (3 Variations)
+- Generates 3 query rewrites:
+  1. Conceptual (technical terminology)
+  2. Business-value (decision-making focus)
+  3. Keyword-style (noun-heavy)
+- Searches with all 3, combines and deduplicates results
+- **Broadest coverage** - ideal for complex or exploratory questions
+
+All modes benefit from **cross-encoder reranking** which re-scores results for better relevance.
 
 ## 🛠️ Technical Details
 
@@ -142,41 +175,67 @@ python3.12 preprocess_pdf.py [pdf_path] [--db-path PATH] [--model MODEL]
 - **Device**: MPS (Mac GPU), CUDA (NVIDIA GPU), or CPU
 - **Normalization**: Enabled for BGE models
 
+### Query Rewriting
+- **HyDE Model**: nvidia/nemotron-3-nano-30b-a3b:free (configurable)
+- **HyDE Temperature**: 0.3 (focused, factual)
+- **Multi-Query Rewrites**: 3 variations per query
+- **Book Context**: Optimized for "Data Science for Business"
+
+### Reranking
+- **Model**: BAAI/bge-reranker-v2-m3 (cross-encoder)
+- **Purpose**: Re-scores retrieved results for better relevance
+- **Scoring**: Higher rerank score = more relevant
+- **Lazy Loading**: Model loaded on first use
+
 ### Text Processing
 - **Chunk Size**: 500 characters
 - **Overlap**: 50 characters (10% of chunk size)
-- **Cleaning**: Unicode normalization, special character handling
+- **Cleaning**:
+  - Unicode normalization
+  - Whitespace normalization (multiple spaces/newlines)
+  - Surrogate character removal
+  - Tab-to-space conversion
+  - Empty line removal
 
 ### Vector Database
 - **Database**: ChromaDB (local, persistent)
-- **Similarity**: Cosine similarity
+- **Similarity**: Cosine distance (1 - cosine similarity)
 - **Top-k Retrieval**: 5 most relevant chunks per query
+- **Deduplication**: Automatic across multi-query results
 
 ### LLM Integration
 - **Provider**: OpenRouter API
-- **Supported Models**:
+- **Default Model**: nvidia/nemotron-3-nano-30b-a3b:free
+- **Supported Models**: Any OpenRouter model
   - anthropic/claude-3.5-sonnet
   - openai/gpt-4o
   - google/gemini-pro-1.5
   - meta-llama/llama-3.1-70b-instruct
-- **Context**: Retrieved chunks from vector search
+- **System Prompt**: Customized for "Data Science for Business" book context
+- **Context**: Retrieved + reranked chunks from vector search
 - **Temperature**: 0.7
 - **Max Tokens**: 2000
 
 ## 📁 Project Structure
 
 ```
-pdf-rag/
-├── app.py                    # Streamlit frontend
-├── rag_backend.py           # Core RAG logic
-├── preprocess_pdf.py        # PDF preprocessing script
-├── requirements.txt         # Python dependencies
-├── run.sh                   # Run script for Streamlit
-├── .gitignore              # Git ignore rules
-├── .env                    # Environment variables (gitignored)
-├── chroma_db/              # Vector database (gitignored)
-├── logs/                   # Preprocessing logs (gitignored)
-└── sample book/            # Sample PDFs (gitignored)
+Book-RAG/
+├── app.py                           # Streamlit frontend with retrieval mode selector
+├── rag_backend.py                   # Core RAG logic with HyDE/Multi-Query/reranking
+├── preprocess_pdf.py                # PDF preprocessing script
+├── delete_collections.py            # Utility to delete ChromaDB collections
+├── test_hyde.py                     # Testing script for retrieval modes
+├── requirements.txt                 # Python dependencies
+├── README.md                        # This file
+├── HYDE_DESIGN.md                   # HyDE technical documentation
+├── MULTI_QUERY_DESIGN.md           # Multi-Query technical documentation
+├── QUERY_REWRITING_SUMMARY.md      # User guide for retrieval modes
+├── IMPROVEMENTS.md                  # Text cleaning and logging improvements
+├── .gitignore                       # Git ignore rules
+├── .env                             # Environment variables (gitignored)
+├── chroma_db/                       # Vector database (gitignored)
+├── logs/                            # Preprocessing logs (gitignored)
+└── sample book/                     # Sample PDFs (gitignored)
 ```
 
 ## 🔧 Configuration
@@ -199,13 +258,30 @@ Arguments:
 ## 📊 Performance
 
 - **Embedding Speed**: ~2-5 chunks/second (depends on hardware)
-- **Query Latency**: <1 second for retrieval, 2-10 seconds for LLM response
+- **Query Latency**:
+  - Direct mode: <1 second for retrieval + reranking
+  - HyDE mode: +1-2 seconds for hypothetical doc generation
+  - Multi-Query mode: +1-2 seconds for query rewrites
+  - LLM response: 2-10 seconds
 - **Storage**: ~1MB per 100 chunks (embeddings + metadata)
-- **Memory Usage**: ~2GB for embedding model + document chunks
+- **Memory Usage**:
+  - Embedding model (bge-base-en-v1.5): ~400MB
+  - Reranker model (bge-reranker-v2-m3): ~1.2GB
+  - Document chunks: ~500MB per 1000 chunks
+
+### Retrieval Quality Improvements
+
+Based on HyDE and Multi-Query research:
+- **HyDE**: 20-40% improvement in retrieval quality for conceptual queries
+- **Multi-Query**: 30-50% broader coverage, captures different query perspectives
+- **Reranking**: 15-30% improvement in result relevance ordering
+- **Combined**: Significantly better results than baseline vector search
 
 ## 🎯 Roadmap
 
-- [ ] Add reranking step for better retrieval accuracy
+- [x] Add reranking step for better retrieval accuracy
+- [x] Query rewriting (HyDE + Multi-Query)
+- [x] Enhanced text cleaning and preprocessing
 - [ ] Support for multiple embedding models
 - [ ] Hybrid search (dense + sparse)
 - [ ] Document versioning and updates

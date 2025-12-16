@@ -38,6 +38,30 @@ with st.sidebar:
 
     st.markdown("---")
 
+    # Retrieval Settings
+    st.markdown("### 🔍 Retrieval Settings")
+    rewrite_mode = st.radio(
+        "Query Rewriting Mode",
+        options=["none", "hyde", "multi_query"],
+        index=1,  # Default to HyDE
+        format_func=lambda x: {
+            "none": "None (Direct search)",
+            "hyde": "HyDE (Hypothetical document)",
+            "multi_query": "Multi-Query (3 variations)"
+        }[x],
+        help="Query rewriting improves retrieval quality:\n"
+             "• None: Search with original query\n"
+             "• HyDE: Generate hypothetical answer, search with that\n"
+             "• Multi-Query: Generate 3 query variations, search with all"
+    )
+
+    if rewrite_mode == "hyde":
+        st.caption("⚡ Generates a hypothetical answer for better retrieval")
+    elif rewrite_mode == "multi_query":
+        st.caption("⚡ Generates 3 query variations for broader coverage")
+
+    st.markdown("---")
+
     # Document selection
     st.markdown("### 📚 Documents")
 
@@ -90,7 +114,10 @@ for message in st.session_state.messages:
             if sources:
                 with st.expander("📎 View Sources"):
                     for i, source in enumerate(sources):
-                        st.markdown(f"**Source #{i+1}** (Distance: {source['distance']:.3f})")
+                        score_info = f"Distance: {source['distance']:.3f}"
+                        if 'rerank_score' in source:
+                            score_info += f" | Rerank: {source['rerank_score']:.3f}"
+                        st.markdown(f"**Source #{i+1}** ({score_info})")
                         st.text(source['text'][:500] + "...")
                         st.markdown(f"*Page: {source['page_number']}*")
                         st.markdown("---")
@@ -113,12 +140,25 @@ if prompt := st.chat_input("Ask a question about your documents"):
 
     # Generate response
     with st.chat_message("assistant"):
+        # Query rewriting step (if enabled)
+        if rewrite_mode == "hyde":
+            with st.spinner("Generating hypothetical document for better retrieval..."):
+                pass  # The actual generation happens in retrieve_relevant_chunks
+        elif rewrite_mode == "multi_query":
+            with st.spinner("Generating 3 query variations for better retrieval..."):
+                pass  # The actual generation happens in retrieve_relevant_chunks
+
         with st.spinner("Searching documents..."):
             # Retrieve relevant chunks
             try:
                 sources = backend.retrieve_relevant_chunks(
                     prompt,
-                    st.session_state.selected_collections
+                    st.session_state.selected_collections,
+                    top_k=5,
+                    rewrite_mode=rewrite_mode,
+                    api_key=openrouter_api_key,
+                    rewrite_model=openrouter_model,
+                    rerank=True
                 )
 
                 if not sources:
@@ -150,7 +190,10 @@ if prompt := st.chat_input("Ask a question about your documents"):
                 # Show sources
                 with st.expander("📎 View Sources"):
                     for i, source in enumerate(sources):
-                        st.markdown(f"**Source #{i+1}** (Distance: {source['distance']:.3f})")
+                        score_info = f"Distance: {source['distance']:.3f}"
+                        if 'rerank_score' in source:
+                            score_info += f" | Rerank: {source['rerank_score']:.3f}"
+                        st.markdown(f"**Source #{i+1}** ({score_info})")
                         st.text(source['text'][:500] + "...")
                         st.markdown(f"*Page: {source['page_number']}*")
                         st.markdown("---")
