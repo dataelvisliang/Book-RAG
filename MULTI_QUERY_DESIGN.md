@@ -25,45 +25,58 @@ Return top-K best matches
 
 ## Rewrite Types
 
-### 1. Conceptual Rewrite
-- **Focus**: Core data science concepts and theoretical foundations
-- **Style**: Academic, technical terminology
-- **Example**: "limitations of accuracy metric, class imbalance, generalization error"
+### 1. Data Mining Terminology
+- **Focus**: Book-specific technical vocabulary from traditional machine learning
+- **Style**: Uses terminology like "supervised learning", "target variable", "holdout data", "model induction", "instance", "attribute"
+- **Example**: "supervised learning target variable training set holdout data model generalization"
+- **Purpose**: Matches the book's specific technical vocabulary
 
-### 2. Business-Value Rewrite
-- **Focus**: Decision-making, costs, benefits, business impact
-- **Style**: Business-oriented, practical applications
-- **Example**: "impact of evaluation metrics on business decisions and expected value"
+### 2. Business Decision Focus
+- **Focus**: Business value, decision-making frameworks, ROI, costs/benefits
+- **Style**: Frames concepts in terms of business impact, targeting, segmentation, risk assessment
+- **Example**: "impact of model overfitting on business decisions expected value ROI targeting"
+- **Purpose**: Aligns with book's emphasis on data-driven business decisions
 
-### 3. Keyword-Style Rewrite
-- **Focus**: Noun-heavy, minimal verbs
-- **Style**: Search-optimized, dense with key terms
-- **Example**: "accuracy vs precision recall evaluation metrics analytics"
+### 3. Analytical Thinking
+- **Focus**: Fundamental data science concepts and reasoning
+- **Style**: Emphasizes patterns in data, generalization, signal vs noise, predictive modeling
+- **Example**: "generalization error signal versus noise predictive modeling data patterns"
+- **Purpose**: Captures the book's focus on data-analytic thinking
 
 ## System Prompt Design
 
 ```
-You are generating search queries to retrieve passages from the book
-'Data Science for Business' by Foster Provost and Tom Fawcett.
+You are generating search queries to retrieve passages from 'Data Science for Business:
+What You Need to Know about Data Mining and Data-Analytic Thinking' by Foster Provost
+and Tom Fawcett.
 
-Rewrite the user question into THREE alternative search queries.
+This book emphasizes data-analytic thinking for business problems. Key topics include:
+- Framing business problems as data mining tasks
+- Supervised learning: classification, regression, probability estimation
+- Evaluation metrics: accuracy, precision, recall, lift, ROI
+- Model complexity: overfitting, generalization, training vs test error
+- Data issues: leakage, selection bias, missing data
+- Decision-making: expected value, costs and benefits
+- Specific algorithms: trees, logistic regression, similarity-based methods
 
-Each rewrite must:
-- Preserve the original meaning
-- Use terminology and concepts common in the book
-- Focus on data-analytic thinking and business decision-making
-- Be concise and suitable for vector search
+Rewrite the user question into THREE alternative search queries:
 
-Rewrite types:
-1. Conceptual rewrite (core data science concepts)
-2. Business-value rewrite (decision making, costs, benefits)
-3. Keyword-style rewrite (noun-heavy, minimal verbs)
+1. **Data Mining Terminology** - Use book-specific terms like 'supervised learning',
+   'target variable', 'training set', 'holdout data', 'model induction', 'attribute',
+   'instance'
+
+2. **Business Decision Focus** - Frame in terms of business value, ROI, expected value,
+   costs/benefits, decision-making, targeting, segmentation, risk assessment
+
+3. **Analytical Thinking** - Focus on fundamental concepts: patterns in data,
+   generalization, signal vs noise, predictive modeling, data-driven decisions
 
 Constraints:
-- Do NOT answer the question
-- Do NOT introduce concepts not likely to appear in the book
-- Do NOT mention modern tools, deep learning, or LLMs
-- Each rewrite should be 1 short sentence or phrase
+- Do NOT answer the question, only rewrite it
+- Do NOT mention: deep learning, neural networks, LLMs, GPT, transformers, or modern frameworks
+- Use terminology from traditional machine learning (pre-2015)
+- Each rewrite: 10-20 words, search-optimized
+- Preserve the core question meaning
 
 Output format: Return ONLY a JSON array of 3 strings, nothing else.
 ```

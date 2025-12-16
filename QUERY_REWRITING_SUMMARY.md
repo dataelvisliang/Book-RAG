@@ -16,12 +16,13 @@ You now have **three different query rewriting strategies** to choose from, each
 - **Default mode**
 
 ### 3. **Multi-Query (NEW!)**
-- Generates 3 query variations:
-  1. Conceptual (technical terminology)
-  2. Business-value (decision-making focus)
-  3. Keyword-style (noun-heavy)
+- Generates 3 query variations specifically tailored to "Data Science for Business":
+  1. Data Mining Terminology (supervised learning, target variable, holdout data)
+  2. Business Decision Focus (ROI, expected value, targeting, segmentation)
+  3. Analytical Thinking (generalization, signal vs noise, data-driven decisions)
 - Searches with all 3, combines results
 - **Broadest coverage, best for comprehensive retrieval**
+- Optimized for traditional ML vocabulary (pre-2015, excludes deep learning concepts)
 
 ## How to Use
 
@@ -52,10 +53,10 @@ Searches for: [that hypothetical answer]
 
 #### Multi-Query Mode (New!):
 ```
-Generates 3 variations:
-1. "model complexity generalization error training data overfitting"
-2. "business impact model performance evaluation overfitting risks"
-3. "overfitting causes regularization validation holdout"
+Generates 3 book-specific variations:
+1. Data Mining Terms: "model complexity training set generalization holdout data target variable"
+2. Business Decision: "overfitting impact business decisions expected value model deployment risk"
+3. Analytical Thinking: "overfitting generalization error signal noise predictive modeling patterns"
 
 Searches with all 3, combines best results
 ```
