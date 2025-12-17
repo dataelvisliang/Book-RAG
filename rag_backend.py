@@ -184,9 +184,14 @@ class RAGBackend:
             except:
                 pass
 
+            # Create friendly display name (remove .pdf extension and title case)
+            display_name = pdf_name.replace('.pdf', '').replace('_', ' ').strip()
+            # Title case each word
+            display_name = ' '.join(word.capitalize() for word in display_name.split())
+
             collection = self.client.create_collection(
                 name=collection_name,
-                metadata={"document_name": pdf_name}
+                metadata={"document_name": display_name}
             )
 
             # Extract text from PDF
