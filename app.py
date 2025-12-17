@@ -1,5 +1,5 @@
 """
-Streamlit Frontend for PDF RAG System
+Streamlit Frontend for Book RAG System
 """
 
 import streamlit as st
@@ -7,8 +7,8 @@ from rag_backend import RAGBackend
 
 # Page config
 st.set_page_config(
-    page_title="PDF RAG System",
-    page_icon="📄",
+    page_title="Book RAG System",
+    page_icon="📚",
     layout="wide"
 )
 
@@ -97,11 +97,11 @@ if "selected_collections" not in st.session_state:
     st.session_state.selected_collections = []
 
 # Main app
-st.title("📄 PDF RAG System")
+st.title("📚 Book RAG System")
 st.caption("Standalone RAG with ChromaDB, Sentence Transformers, and OpenRouter")
 
 # Chat interface
-st.subheader("💬 Chat with your documents")
+st.subheader("💬 Chat with your books")
 
 # Display chat messages
 for message in st.session_state.messages:
