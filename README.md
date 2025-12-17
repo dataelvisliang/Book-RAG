@@ -1,49 +1,73 @@
-# 📄 Book RAG - Standalone PDF Question-Answering System
+# 📚 Book RAG - Advanced Multi-Book Question-Answering System
 
-A powerful, standalone Python-based RAG (Retrieval-Augmented Generation) system for chatting with your PDF documents. Built with local embeddings, persistent vector storage, and OpenRouter LLM integration.
+A powerful, standalone Python-based RAG (Retrieval-Augmented Generation) system for intelligent conversations with your PDF books. Built with local embeddings, persistent vector storage, advanced retrieval techniques, and streaming LLM responses.
+
+![Chat Interface](assets/Chat%20with%20your%20book.png)
 
 ## ✨ Features
 
-- 📚 **Local PDF Processing**: Process PDFs with detailed text extraction and chunking
-- 🧠 **Local Embeddings**: Generate embeddings locally using BAAI/bge-base-en-v1.5 (GPU-accelerated on Mac)
-- 💾 **Persistent Storage**: ChromaDB vector database for efficient retrieval
-- 🔍 **Advanced Query Rewriting**: Three retrieval strategies (Direct, HyDE, Multi-Query) for better search quality
-- 🎯 **Cross-Encoder Reranking**: BAAI/bge-reranker-v2-m3 for improved result ranking
-- 🤖 **Multiple LLM Support**: Use any model from OpenRouter (Claude, GPT-4, Gemini, LLaMA, etc.)
-- 📖 **Book-Specific Context**: Optimized for "Data Science for Business" by Provost & Fawcett
-- 📊 **Comprehensive Logging**: Detailed preprocessing logs with statistics
-- 🔄 **Standalone Preprocessing**: Separate script for batch PDF processing
-- 💬 **Interactive Chat**: Clean Streamlit interface with conversation history
-- 📊 **Dual Scoring**: View both vector similarity and rerank scores for each source
+### 📚 **Multi-Book Support with Book-Specific Intelligence**
+- Support for multiple PDF books simultaneously
+- Book-specific prompts tailored to each document's domain
+- Optimized for technical guides and business books
+- Dynamic prompt adaptation based on selected books
+
+### 🔍 **Advanced Retrieval System**
+- **Three Retrieval Strategies**: Direct search, HyDE (Hypothetical Document Embeddings), and Multi-Query
+- **Canonical Query Rewriting**: Intent-preserving query reformulation optimized for each book's terminology
+- **Cross-Encoder Reranking**: BAAI/bge-reranker-v2-m3 for superior result relevance
+- **Top-10 Retrieval**: Comprehensive context gathering with automatic deduplication
+
+### 🧠 **Local Embeddings & GPU Acceleration**
+- BAAI/bge-base-en-v1.5 embeddings (768 dimensions)
+- Auto-detect CUDA/MPS GPU acceleration
+- Persistent ChromaDB vector storage
+
+### 💬 **Modern Chat Experience**
+- **Real-time streaming responses** with word-by-word generation
+- Clean Streamlit interface with animated elements
+- Conversation history with full source attribution
+- Dual scoring display (distance + rerank scores)
+
+![Citations and Sources](assets/Citations.png)
+
+### 🤖 **Flexible LLM Integration**
+- OpenRouter API with support for any model
+- Streaming support for immediate feedback
+- Book-specific system prompts for optimal answers
+- Inline citations with comprehensive references
 
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                  Streamlit UI (app.py)              │
-│  - Chat interface                                   │
-│  - Document selection                               │
-│  - Retrieval mode selector (None/HyDE/Multi-Query)  │
-│  - API configuration                                │
-└────────────────┬────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│               Streamlit UI (app.py)                      │
+│  - Real-time streaming chat interface                   │
+│  - Multi-book selection with checkboxes                 │
+│  - Retrieval mode selector (None/HyDE/Multi-Query)      │
+│  - Lottie animations for visual feedback                │
+│  - API configuration sidebar                            │
+└────────────────┬─────────────────────────────────────────┘
                  │
-┌────────────────▼────────────────────────────────────┐
-│            RAG Backend (rag_backend.py)             │
-│  - PDF text extraction & advanced cleaning          │
-│  - Text chunking (500 chars, 50 overlap)            │
-│  - Embedding generation (BAAI/bge-base-en-v1.5)     │
-│  - Query rewriting (HyDE/Multi-Query)               │
-│  - ChromaDB vector storage & retrieval              │
-│  - Cross-encoder reranking (bge-reranker-v2-m3)     │
-│  - OpenRouter LLM query with book context           │
-└────────────────┬────────────────────────────────────┘
+┌────────────────▼─────────────────────────────────────────┐
+│              RAG Backend (rag_backend.py)                │
+│  - PDF text extraction & advanced cleaning               │
+│  - Text chunking (500 chars, 50 overlap)                 │
+│  - GPU-accelerated embeddings (BAAI/bge-base-en-v1.5)    │
+│  - Book-specific query rewriting (HyDE/Multi-Query)      │
+│  - ChromaDB vector storage & retrieval (top-10)          │
+│  - Cross-encoder reranking (bge-reranker-v2-m3)          │
+│  - Streaming OpenRouter LLM with book-specific prompts   │
+│  - Dynamic prompt adaptation per book                    │
+└────────────────┬─────────────────────────────────────────┘
                  │
-┌────────────────▼────────────────────────────────────┐
-│         Preprocessing (preprocess_pdf.py)           │
-│  - Batch PDF processing                             │
-│  - Detailed logging with progress tracking          │
-│  - Statistics tracking                              │
-└─────────────────────────────────────────────────────┘
+┌────────────────▼─────────────────────────────────────────┐
+│            Preprocessing (preprocess_pdf.py)             │
+│  - Batch PDF processing with GPU support                │
+│  - Friendly display name generation                     │
+│  - Detailed logging with progress tracking              │
+│  - Statistics tracking and validation                   │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ## 🚀 Quick Start
@@ -172,20 +196,25 @@ All modes benefit from **cross-encoder reranking** which re-scores results for b
 ### Embedding Model
 - **Model**: BAAI/bge-base-en-v1.5
 - **Dimensions**: 768
-- **Device**: MPS (Mac GPU), CUDA (NVIDIA GPU), or CPU
+- **Device**: Auto-detect CUDA (NVIDIA GPU), MPS (Mac GPU), or CPU fallback
+- **GPU Support**: Automatically applied to both embedding and reranking models
 - **Normalization**: Enabled for BGE models
 
-### Query Rewriting
+### Query Rewriting (Book-Specific)
 - **HyDE Model**: nvidia/nemotron-3-nano-30b-a3b:free (configurable)
-- **HyDE Temperature**: 0.3 (focused, factual)
-- **Multi-Query Rewrites**: 3 variations per query
-- **Book Context**: Optimized for "Data Science for Business"
+- **HyDE Temperature**: 0.3 (focused, canonical generation)
+- **Multi-Query Rewrites**: 3 canonical variations per query
+- **Book-Specific Prompts**:
+  - Data Science for Business: Data mining terminology, business decision focus, analytical thinking
+  - RAG Guide: RAG technical terms, implementation focus, architecture concepts
+- **Intent Preservation**: All rewrites maintain original user intent while optimizing for retrieval
 
 ### Reranking
 - **Model**: BAAI/bge-reranker-v2-m3 (cross-encoder)
-- **Purpose**: Re-scores retrieved results for better relevance
-- **Scoring**: Higher rerank score = more relevant
-- **Lazy Loading**: Model loaded on first use
+- **Purpose**: Re-scores retrieved results for superior relevance
+- **Scoring**: Higher rerank score = more relevant (displayed alongside distance)
+- **GPU Support**: Auto-detect and use GPU for faster reranking
+- **Lazy Loading**: Model loaded on first use to save memory
 
 ### Text Processing
 - **Chunk Size**: 500 characters
@@ -200,10 +229,11 @@ All modes benefit from **cross-encoder reranking** which re-scores results for b
 ### Vector Database
 - **Database**: ChromaDB (local, persistent)
 - **Similarity**: Cosine distance (1 - cosine similarity)
-- **Top-k Retrieval**: 5 most relevant chunks per query
+- **Top-k Retrieval**: 10 most relevant chunks per query (increased for comprehensive context)
 - **Deduplication**: Automatic across multi-query results
+- **Collection Metadata**: Stores friendly display names for each book
 
-### LLM Integration
+### LLM Integration with Streaming
 - **Provider**: OpenRouter API
 - **Default Model**: nvidia/nemotron-3-nano-30b-a3b:free
 - **Supported Models**: Any OpenRouter model
@@ -211,10 +241,15 @@ All modes benefit from **cross-encoder reranking** which re-scores results for b
   - openai/gpt-4o
   - google/gemini-pro-1.5
   - meta-llama/llama-3.1-70b-instruct
-- **System Prompt**: Customized for "Data Science for Business" book context
-- **Context**: Retrieved + reranked chunks from vector search
+- **Streaming**: Real-time word-by-word response generation with cursor effect
+- **System Prompts**: Book-specific prompts that adapt based on selected books:
+  - Data Science for Business: Focuses on business decision-making and analytical thinking
+  - RAG Guide: Focuses on system architecture and implementation details
+  - Multi-book: Generic prompt for multiple books
+- **Context**: Top-10 retrieved + reranked chunks from vector search
 - **Temperature**: 0.7
-- **Max Tokens**: 2000
+- **Max Tokens**: 1500
+- **Citations**: Inline citations [1], [2] with References section
 
 ## 📁 Project Structure
 
@@ -279,15 +314,28 @@ Based on HyDE and Multi-Query research:
 
 ## 🎯 Roadmap
 
-- [x] Add reranking step for better retrieval accuracy
-- [x] Query rewriting (HyDE + Multi-Query)
+### ✅ Completed Features
+- [x] Cross-encoder reranking for superior retrieval accuracy
+- [x] Query rewriting with HyDE and Multi-Query strategies
+- [x] Book-specific canonical query rewrites
 - [x] Enhanced text cleaning and preprocessing
+- [x] GPU acceleration for embeddings and reranking
+- [x] Multi-book support with dynamic prompt adaptation
+- [x] Streaming LLM responses with real-time feedback
+- [x] Top-10 retrieval for comprehensive context
+- [x] Lottie animations for modern UI
+- [x] Inline citations with reference tracking
+- [x] Dual scoring display (distance + rerank)
+
+### 🚧 Future Enhancements
 - [ ] Support for multiple embedding models
-- [ ] Hybrid search (dense + sparse)
+- [ ] Hybrid search (dense + sparse retrieval)
 - [ ] Document versioning and updates
-- [ ] Multi-document query support
-- [ ] Conversation memory and context
-- [ ] Export chat history
+- [ ] Conversation memory and context tracking
+- [ ] Export chat history to markdown/PDF
+- [ ] Batch question answering
+- [ ] Custom book prompt templates
+- [ ] Advanced filtering by page ranges
 
 ## 📝 License
 

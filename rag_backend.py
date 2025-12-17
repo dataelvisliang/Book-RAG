@@ -33,11 +33,15 @@ class RAGBackend:
             settings=Settings(anonymized_telemetry=False)
         )
 
-        # Load embedding model
-        self.embedding_model = SentenceTransformer(embedding_model_name)
+        # Load embedding model with GPU support
+        import torch
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        logging.info(f"Using device: {device}")
+        self.embedding_model = SentenceTransformer(embedding_model_name, device=device)
 
         # Load reranker model (lazy loading)
         self.reranker = None
+        self.device = device
 
     def extract_text_from_pdf(self, pdf_file):
         """
@@ -345,7 +349,107 @@ class RAGBackend:
         except Exception as e:
             return False, f"Error processing PDF: {e}"
 
-    def generate_query_rewrites(self, query, api_key, model="nvidia/nemotron-3-nano-30b-a3b:free", book_context="Data Science for Business: What You Need to Know about Data Mining and Data-Analytic Thinking by Foster Provost and Tom Fawcett"):
+    def _get_multi_query_prompt(self, collection_names):
+        """
+        Generate book-specific Multi-Query rewrite prompt based on selected collections.
+
+        Args:
+            collection_names: List of collection names being queried
+
+        Returns:
+            Tuple of (book_context_string, system_prompt_for_rewrites)
+        """
+        # Get display names of selected collections
+        book_names = []
+        for col_name in collection_names:
+            try:
+                collection = self.client.get_collection(col_name)
+                display_name = collection.metadata.get('document_name', col_name)
+                book_names.append(display_name.lower())
+            except:
+                continue
+
+        # Check which books are selected
+        has_ds_business = any('data science for business' in name for name in book_names)
+        has_rag_guide = any('retrieval augmented generation' in name or 'rag' in name for name in book_names)
+
+        if has_rag_guide and not has_ds_business:
+            # RAG Guide specific Multi-Query prompt
+            book_context = "A Simple Guide to Retrieval Augmented Generation"
+            system_prompt = (
+                f"You are generating canonical, intent-preserving search queries to retrieve passages from '{book_context}'.\n\n"
+                "This guide focuses on RAG (Retrieval-Augmented Generation) systems and implementation. Key topics include:\n"
+                "- Vector databases and embeddings (dense retrieval, semantic search)\n"
+                "- Text chunking strategies (chunk size, overlap, document structure)\n"
+                "- Retrieval methods (similarity search, hybrid search, metadata filtering)\n"
+                "- Context injection and prompt engineering for RAG\n"
+                "- Evaluation metrics (retrieval accuracy, answer quality, latency)\n"
+                "- Production systems (scaling, caching, reranking)\n\n"
+                "Rewrite the user question into THREE canonical alternative search queries that preserve user intent:\n\n"
+                "1. **RAG Technical Terms** - Use canonical RAG terminology: 'embeddings', 'vector database', 'semantic search', "
+                "'chunking', 'retrieval', 'context window', 'reranking', 'dense retrieval'\n\n"
+                "2. **Implementation Focus** - Frame in terms of system building: architecture, components, data flow, "
+                "performance optimization, production deployment, best practices\n\n"
+                "3. **Architecture Concepts** - Focus on design patterns: retrieval pipeline, indexing strategy, "
+                "query processing, context assembly, answer generation\n\n"
+                "Constraints:\n"
+                "- Do NOT answer the question, only rewrite it\n"
+                "- Create canonical rewrites that capture the core intent\n"
+                "- Use standard RAG terminology and concepts\n"
+                "- Each rewrite: 10-20 words, search-optimized\n"
+                "- Preserve the user's original intent exactly\n\n"
+                "Output format: Return ONLY a JSON array of 3 strings, nothing else."
+            )
+        elif has_ds_business and not has_rag_guide:
+            # Data Science for Business specific Multi-Query prompt
+            book_context = "Data Science for Business: What You Need to Know about Data Mining and Data-Analytic Thinking by Foster Provost and Tom Fawcett"
+            system_prompt = (
+                f"You are generating canonical, intent-preserving search queries to retrieve passages from '{book_context}'.\n\n"
+                "This book emphasizes data-analytic thinking for business problems. Key topics include:\n"
+                "- Framing business problems as data mining tasks\n"
+                "- Supervised learning: classification, regression, probability estimation\n"
+                "- Evaluation metrics: accuracy, precision, recall, lift, ROI\n"
+                "- Model complexity: overfitting, generalization, training vs test error\n"
+                "- Data issues: leakage, selection bias, missing data\n"
+                "- Decision-making: expected value, costs and benefits\n"
+                "- Specific algorithms: trees, logistic regression, similarity-based methods\n\n"
+                "Rewrite the user question into THREE canonical alternative search queries that preserve user intent:\n\n"
+                "1. **Data Mining Terminology** - Use canonical book terms: 'supervised learning', 'target variable', "
+                "'training set', 'holdout data', 'model induction', 'attribute', 'instance'\n\n"
+                "2. **Business Decision Focus** - Frame in terms of business value: ROI, expected value, costs/benefits, "
+                "decision-making, targeting, segmentation, risk assessment\n\n"
+                "3. **Analytical Thinking** - Focus on fundamental concepts: patterns in data, generalization, "
+                "signal vs noise, predictive modeling, data-driven decisions\n\n"
+                "Constraints:\n"
+                "- Do NOT answer the question, only rewrite it\n"
+                "- Create canonical rewrites that capture the core intent\n"
+                "- Do NOT mention: deep learning, neural networks, LLMs, GPT, transformers, or modern frameworks\n"
+                "- Use terminology from traditional machine learning (pre-2015)\n"
+                "- Each rewrite: 10-20 words, search-optimized\n"
+                "- Preserve the user's original intent exactly\n\n"
+                "Output format: Return ONLY a JSON array of 3 strings, nothing else."
+            )
+        else:
+            # Generic Multi-Query prompt for multiple books
+            book_list = ", ".join([f"'{name.title()}'" for name in book_names if name])
+            book_context = book_list
+            system_prompt = (
+                f"You are generating canonical, intent-preserving search queries to retrieve passages from {book_context}.\n\n"
+                "Rewrite the user question into THREE alternative search queries that preserve user intent:\n\n"
+                "1. **Conceptual Rewrite** - Focus on core concepts and theoretical understanding\n"
+                "2. **Practical Rewrite** - Focus on implementation and application\n"
+                "3. **Keyword Rewrite** - Focus on key terms and specific topics\n\n"
+                "Constraints:\n"
+                "- Do NOT answer the question, only rewrite it\n"
+                "- Create canonical rewrites that capture the core intent\n"
+                "- Each rewrite: 10-20 words, search-optimized\n"
+                "- Preserve the user's original intent exactly\n\n"
+                "Output format: Return ONLY a JSON array of 3 strings, nothing else."
+            )
+
+        return book_context, system_prompt
+
+    def generate_query_rewrites(self, query, api_key, model="nvidia/nemotron-3-nano-30b-a3b:free", collection_names=None):
         """
         Generate multiple alternative search queries (Multi-Query approach).
 
@@ -353,13 +457,16 @@ class RAGBackend:
             query: User's question
             api_key: OpenRouter API key
             model: Model to use for generation
-            book_context: Context about the book being searched
+            collection_names: List of collection names being queried (for book-specific prompts)
 
         Returns:
             List of rewritten queries
         """
         try:
             logging.info(f"Generating query rewrites for: {query[:100]}...")
+
+            # Get book-specific prompt
+            book_context, system_prompt = self._get_multi_query_prompt(collection_names or [])
 
             headers = {
                 "Authorization": f"Bearer {api_key}",
@@ -369,35 +476,11 @@ class RAGBackend:
             messages = [
                 {
                     "role": "system",
-                    "content": (
-                        f"You are generating search queries to retrieve passages from '{book_context}'.\n\n"
-                        "This book emphasizes data-analytic thinking for business problems. Key topics include:\n"
-                        "- Framing business problems as data mining tasks\n"
-                        "- Supervised learning: classification, regression, probability estimation\n"
-                        "- Evaluation metrics: accuracy, precision, recall, lift, ROI\n"
-                        "- Model complexity: overfitting, generalization, training vs test error\n"
-                        "- Data issues: leakage, selection bias, missing data\n"
-                        "- Decision-making: expected value, costs and benefits\n"
-                        "- Specific algorithms: trees, logistic regression, similarity-based methods\n\n"
-                        "Rewrite the user question into THREE alternative search queries:\n\n"
-                        "1. **Data Mining Terminology** - Use book-specific terms like 'supervised learning', 'target variable', "
-                        "'training set', 'holdout data', 'model induction', 'attribute', 'instance'\n\n"
-                        "2. **Business Decision Focus** - Frame in terms of business value, ROI, expected value, costs/benefits, "
-                        "decision-making, targeting, segmentation, risk assessment\n\n"
-                        "3. **Analytical Thinking** - Focus on fundamental concepts: patterns in data, generalization, "
-                        "signal vs noise, predictive modeling, data-driven decisions\n\n"
-                        "Constraints:\n"
-                        "- Do NOT answer the question, only rewrite it\n"
-                        "- Do NOT mention: deep learning, neural networks, LLMs, GPT, transformers, or modern frameworks\n"
-                        "- Use terminology from traditional machine learning (pre-2015)\n"
-                        "- Each rewrite: 10-20 words, search-optimized\n"
-                        "- Preserve the core question meaning\n\n"
-                        "Output format: Return ONLY a JSON array of 3 strings, nothing else."
-                    )
+                    "content": system_prompt
                 },
                 {
                     "role": "user",
-                    "content": f"User question:\n{query}\n\nGenerate 3 search query rewrites:"
+                    "content": f"User question:\n{query}\n\nGenerate 3 canonical search query rewrites:"
                 }
             ]
 
@@ -449,7 +532,72 @@ class RAGBackend:
             logging.info("Falling back to original query")
             return None
 
-    def generate_hypothetical_document(self, query, api_key, model="nvidia/nemotron-3-nano-30b-a3b:free"):
+    def _get_hyde_prompt(self, collection_names):
+        """
+        Generate book-specific HyDE prompt based on selected collections.
+
+        Args:
+            collection_names: List of collection names being queried
+
+        Returns:
+            Tuple of (book_context_string, system_prompt_for_hyde, user_prompt_template)
+        """
+        # Get display names of selected collections
+        book_names = []
+        for col_name in collection_names:
+            try:
+                collection = self.client.get_collection(col_name)
+                display_name = collection.metadata.get('document_name', col_name)
+                book_names.append(display_name.lower())
+            except:
+                continue
+
+        # Check which books are selected
+        has_ds_business = any('data science for business' in name for name in book_names)
+        has_rag_guide = any('retrieval augmented generation' in name or 'rag' in name for name in book_names)
+
+        if has_rag_guide and not has_ds_business:
+            # RAG Guide specific HyDE prompt
+            book_context = "A Simple Guide to Retrieval Augmented Generation"
+            system_prompt = (
+                f"You are writing canonical content for '{book_context}'. "
+                "This guide focuses on RAG (Retrieval-Augmented Generation) systems, architecture, and implementation best practices. "
+                "Given a question, write a detailed, canonical paragraph in the style of a technical guide that would answer the question. "
+                "Focus on: system architecture, implementation details, component interactions, and practical engineering considerations. "
+                "Write in a clear, technical style using standard RAG terminology. "
+                "Do not use phrases like 'the answer is' or 'in conclusion'. "
+                "Just write the factual, canonical content directly as it would appear in a RAG implementation guide."
+            )
+            user_prompt_template = f"Write a canonical paragraph from '{book_context}' that would answer this question: {{query}}"
+        elif has_ds_business and not has_rag_guide:
+            # Data Science for Business specific HyDE prompt
+            book_context = "Data Science for Business: What You Need to Know about Data Mining and Data-Analytic Thinking by Foster Provost and Tom Fawcett"
+            system_prompt = (
+                f"You are writing canonical content for '{book_context}'. "
+                "This book focuses on data-analytic thinking and how data science connects to business decision-making. "
+                "Given a question, write a detailed, canonical paragraph in the style of this book that would answer the question. "
+                "Focus on: business implications, decision-making frameworks, analytical thinking, and practical application. "
+                "Write in an informative, encyclopedic style using standard data mining terminology. "
+                "Do not use phrases like 'the answer is' or 'in conclusion'. "
+                "Just write the factual, canonical content directly as it would appear in the book."
+            )
+            user_prompt_template = f"Write a canonical paragraph from '{book_context}' that would answer this question: {{query}}"
+        else:
+            # Generic HyDE prompt for multiple books
+            book_list = ", ".join([f"'{name.title()}'" for name in book_names if name])
+            book_context = book_list
+            system_prompt = (
+                f"You are writing canonical content from {book_context}. "
+                "Given a question, write a detailed, canonical paragraph that would answer the question. "
+                "Write in an informative style appropriate to the source material. "
+                "Do not use phrases like 'the answer is' or 'in conclusion'. "
+                "Just write the factual, canonical content directly."
+            )
+            user_prompt_template = f"Write a canonical paragraph that would answer this question: {{query}}"
+
+        return book_context, system_prompt, user_prompt_template
+
+    def generate_hypothetical_document(self, query, api_key, model="nvidia/nemotron-3-nano-30b-a3b:free", collection_names=None):
         """
         Generate a hypothetical document that would answer the query (HyDE).
 
@@ -457,12 +605,16 @@ class RAGBackend:
             query: User's question
             api_key: OpenRouter API key
             model: Model to use for generation
+            collection_names: List of collection names being queried (for book-specific prompts)
 
         Returns:
             Generated hypothetical document text
         """
         try:
             logging.info(f"Generating hypothetical document for query: {query[:100]}...")
+
+            # Get book-specific prompt
+            book_context, system_prompt, user_prompt_template = self._get_hyde_prompt(collection_names or [])
 
             headers = {
                 "Authorization": f"Bearer {api_key}",
@@ -472,18 +624,11 @@ class RAGBackend:
             messages = [
                 {
                     "role": "system",
-                    "content": (
-                        "You are writing content for 'Data Science for Business' by Foster Provost and Tom Fawcett. "
-                        "This book focuses on data-analytic thinking and how data science connects to business decision-making. "
-                        "Given a question, write a detailed paragraph in the style of this book that would answer the question. "
-                        "Focus on business implications, decision-making frameworks, and practical application. "
-                        "Write in an informative, encyclopedic style. Do not use phrases like 'the answer is' or 'in conclusion'. "
-                        "Just write the factual content directly as it would appear in the book."
-                    )
+                    "content": system_prompt
                 },
                 {
                     "role": "user",
-                    "content": f"Write a detailed paragraph from 'Data Science for Business' that would answer this question: {query}"
+                    "content": user_prompt_template.format(query=query)
                 }
             ]
 
@@ -518,9 +663,9 @@ class RAGBackend:
     def _rerank_results(self, query, results, top_k):
         """Rerank results using cross-encoder reranker."""
         if self.reranker is None:
-            logging.info("Loading reranker model (BAAI/bge-reranker-v2-m3)...")
+            logging.info(f"Loading reranker model (BAAI/bge-reranker-v2-m3) on {self.device}...")
             from sentence_transformers import CrossEncoder
-            self.reranker = CrossEncoder('BAAI/bge-reranker-v2-m3')
+            self.reranker = CrossEncoder('BAAI/bge-reranker-v2-m3', device=self.device)
             logging.info("Reranker loaded")
 
         # Prepare pairs for reranking
@@ -560,8 +705,8 @@ class RAGBackend:
             queries_to_embed = [query]  # Default: just the original query
 
             if rewrite_mode == "hyde" and api_key:
-                # Generate hypothetical document
-                hypothetical_doc = self.generate_hypothetical_document(query, api_key, rewrite_model)
+                # Generate hypothetical document with book-specific prompts
+                hypothetical_doc = self.generate_hypothetical_document(query, api_key, rewrite_model, collection_names)
 
                 if hypothetical_doc:
                     queries_to_embed = [hypothetical_doc]
@@ -570,8 +715,8 @@ class RAGBackend:
                     logging.info("HyDE generation failed, using original query")
 
             elif rewrite_mode == "multi_query" and api_key:
-                # Generate multiple query rewrites
-                rewrites = self.generate_query_rewrites(query, api_key, rewrite_model)
+                # Generate multiple query rewrites with book-specific prompts
+                rewrites = self.generate_query_rewrites(query, api_key, rewrite_model, collection_names)
 
                 if rewrites:
                     queries_to_embed = rewrites
@@ -648,7 +793,62 @@ class RAGBackend:
         """
         return self.client.list_collections()
 
-    def query_openrouter(self, message, context, api_key, model):
+    def _get_book_specific_prompt(self, collection_names):
+        """Generate book-specific system prompt based on selected collections."""
+        # Get display names of selected collections
+        book_names = []
+        for col_name in collection_names:
+            try:
+                collection = self.client.get_collection(col_name)
+                display_name = collection.metadata.get('document_name', col_name)
+                book_names.append(display_name.lower())
+            except:
+                continue
+
+        # Check which books are selected
+        has_ds_business = any('data science for business' in name for name in book_names)
+        has_rag_guide = any('retrieval augmented generation' in name or 'rag' in name for name in book_names)
+
+        if has_rag_guide and not has_ds_business:
+            # RAG Guide specific prompt
+            return (
+                "You are an AI assistant helping readers understand 'A Simple Guide to Retrieval Augmented Generation'.\n\n"
+                "This guide focuses on RAG (Retrieval-Augmented Generation) systems and techniques. "
+                "Key topics include: vector databases, embeddings, semantic search, chunking strategies, "
+                "retrieval methods, context injection, prompt engineering for RAG, evaluation metrics, "
+                "and building production RAG systems.\n\n"
+                "IMPORTANT: Provide thorough, comprehensive answers that synthesize information from ALL retrieved chunks. "
+                "Connect related concepts, explain how different pieces fit together, and provide complete explanations. "
+                "If the context doesn't contain the answer, say so clearly. "
+                "Reference specific pages using inline citations [1], [2], etc. "
+                "Focus on practical implementation details, system architecture, and best practices for building RAG applications."
+            )
+        elif has_ds_business and not has_rag_guide:
+            # Data Science for Business specific prompt
+            return (
+                "You are an AI assistant helping readers understand 'Data Science for Business: What You Need to Know about "
+                "Data Mining and Data-Analytic Thinking' by Foster Provost and Tom Fawcett.\n\n"
+                "This book focuses on data-analytic thinking - reasoning about problems so data science is useful for business decisions. "
+                "Key themes include: framing business problems as data science problems, prediction/classification/ranking/clustering, "
+                "evaluation metrics (accuracy vs precision/recall vs lift), overfitting, causality vs correlation, data leakage, "
+                "and how data science connects to decision-making and value creation.\n\n"
+                "IMPORTANT: Provide thorough, comprehensive answers that synthesize information from ALL retrieved chunks. "
+                "Connect business concepts with technical implementation, explain trade-offs, and provide complete explanations. "
+                "If the context doesn't contain the answer, say so clearly. "
+                "Reference specific pages using inline citations [1], [2], etc. "
+                "Focus on explaining concepts in terms of business decision-making and practical application, not just technical details."
+            )
+        else:
+            # Multiple books or generic prompt
+            book_list = ", ".join([f"'{name.title()}'" for name in book_names if name])
+            return (
+                f"You are an AI assistant helping readers understand the following book(s): {book_list}.\n\n"
+                "Answer questions based on the provided context from these books. If the context doesn't contain the answer, say so clearly. "
+                "Reference specific pages when citing information (e.g., 'According to page 5...'). "
+                "When information comes from multiple books, clearly indicate which book each point comes from."
+            )
+
+    def query_openrouter(self, message, context, api_key, model, collection_names=None, stream=False):
         """
         Generate answer using OpenRouter API.
 
@@ -657,9 +857,11 @@ class RAGBackend:
             context: Retrieved context from documents
             api_key: OpenRouter API key
             model: Model name to use
+            collection_names: List of collection names being queried (for book-specific prompts)
+            stream: If True, return a generator that yields chunks; if False, return complete text
 
         Returns:
-            Generated answer text
+            Generated answer text (if stream=False) or generator yielding chunks (if stream=True)
         """
         try:
             headers = {
@@ -667,20 +869,13 @@ class RAGBackend:
                 "Content-Type": "application/json"
             }
 
+            # Get book-specific system prompt
+            system_prompt = self._get_book_specific_prompt(collection_names or [])
+
             messages = [
                 {
                     "role": "system",
-                    "content": (
-                        "You are an AI assistant helping readers understand 'Data Science for Business: What You Need to Know about "
-                        "Data Mining and Data-Analytic Thinking' by Foster Provost and Tom Fawcett.\n\n"
-                        "This book focuses on data-analytic thinking - reasoning about problems so data science is useful for business decisions. "
-                        "Key themes include: framing business problems as data science problems, prediction/classification/ranking/clustering, "
-                        "evaluation metrics (accuracy vs precision/recall vs lift), overfitting, causality vs correlation, data leakage, "
-                        "and how data science connects to decision-making and value creation.\n\n"
-                        "Answer questions based on the provided context from the book. If the context doesn't contain the answer, say so clearly. "
-                        "Reference specific pages when citing information (e.g., 'According to page 5...'). "
-                        "Focus on explaining concepts in terms of business decision-making and practical application, not just technical details."
-                    )
+                    "content": system_prompt
                 },
                 {
                     "role": "user",
@@ -702,19 +897,65 @@ class RAGBackend:
                 "model": model,
                 "messages": messages,
                 "temperature": 0.7,
-                "max_tokens": 1500
+                "max_tokens": 1500,
+                "stream": stream
             }
 
-            response = requests.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers=headers,
-                json=payload,
-                timeout=60
-            )
+            if stream:
+                # Return generator for streaming
+                return self._stream_openrouter_response(headers, payload)
+            else:
+                # Non-streaming response (original behavior)
+                response = requests.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers=headers,
+                    json=payload,
+                    timeout=60
+                )
 
-            response.raise_for_status()
-            result = response.json()
-            return result["choices"][0]["message"]["content"]
+                response.raise_for_status()
+                result = response.json()
+                return result["choices"][0]["message"]["content"]
 
         except Exception as e:
             raise Exception(f"OpenRouter error: {e}")
+
+    def _stream_openrouter_response(self, headers, payload):
+        """
+        Stream response from OpenRouter API.
+
+        Args:
+            headers: Request headers
+            payload: Request payload
+
+        Yields:
+            Text chunks from the streaming response
+        """
+        import json
+
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers=headers,
+            json=payload,
+            stream=True,
+            timeout=60
+        )
+
+        response.raise_for_status()
+
+        for line in response.iter_lines():
+            if line:
+                line = line.decode('utf-8')
+                if line.startswith('data: '):
+                    data = line[6:]  # Remove 'data: ' prefix
+                    if data == '[DONE]':
+                        break
+                    try:
+                        chunk = json.loads(data)
+                        if 'choices' in chunk and len(chunk['choices']) > 0:
+                            delta = chunk['choices'][0].get('delta', {})
+                            content = delta.get('content', '')
+                            if content:
+                                yield content
+                    except json.JSONDecodeError:
+                        continue

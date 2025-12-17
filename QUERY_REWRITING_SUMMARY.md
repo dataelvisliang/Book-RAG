@@ -1,28 +1,39 @@
 # Query Rewriting Implementation Summary
 
-## ✅ Three Retrieval Modes Now Available!
+## ✅ Three Book-Specific Retrieval Modes Available!
 
-You now have **three different query rewriting strategies** to choose from, each optimized for different use cases:
+You now have **three different query rewriting strategies** with **book-specific optimization**, each tailored to your selected books:
 
 ### 1. **None (Direct Search)**
 - Searches with original query as-is
 - Fastest option
-- Best for keyword searches
+- Best for keyword searches and exact phrases
 
 ### 2. **HyDE (Hypothetical Document Embeddings)**
-- Generates hypothetical answer to your question
+- Generates **canonical hypothetical documents** in the style of your selected book
 - Searches with the answer instead of question
+- **Book-Specific Styles**:
+  - Data Science for Business: Business analytics focus with decision-making frameworks
+  - RAG Guide: Technical implementation focus with system architecture
 - Best for conceptual "What is..." queries
 - **Default mode**
 
-### 3. **Multi-Query (NEW!)**
-- Generates 3 query variations specifically tailored to "Data Science for Business":
+### 3. **Multi-Query with Canonical Rewrites**
+- Generates **3 canonical, intent-preserving query variations** tailored to your book:
+
+  **For Data Science for Business**:
   1. Data Mining Terminology (supervised learning, target variable, holdout data)
   2. Business Decision Focus (ROI, expected value, targeting, segmentation)
   3. Analytical Thinking (generalization, signal vs noise, data-driven decisions)
-- Searches with all 3, combines results
+
+  **For A Simple Guide to RAG**:
+  1. RAG Technical Terms (embeddings, vector database, semantic search, chunking)
+  2. Implementation Focus (architecture, components, performance optimization)
+  3. Architecture Concepts (retrieval pipeline, indexing strategy, query processing)
+
+- Searches with all 3, combines and deduplicates results
 - **Broadest coverage, best for comprehensive retrieval**
-- Optimized for traditional ML vocabulary (pre-2015, excludes deep learning concepts)
+- **Intent preservation**: All rewrites maintain your original question intent
 
 ## How to Use
 
@@ -202,6 +213,26 @@ After you reprocess embeddings:
 
 ---
 
-**You now have three powerful retrieval modes to choose from!** 🎯🚀
+**You now have three powerful, book-specific retrieval modes to choose from!** 🎯🚀
+
+## 🆕 Latest Improvements (v2.0)
+
+### Book-Specific Query Rewriting
+- **Canonical Rewrites**: All query rewrites now use canonical terminology specific to each book
+- **Intent Preservation**: Explicit constraints ensure rewrites maintain original user intent
+- **Book Detection**: System automatically detects which books are selected and adapts prompts
+- **Dynamic Adaptation**: Different rewrite strategies for different book types
+
+### Enhanced Retrieval
+- **Top-10 Results**: Increased from 5 to 10 chunks for more comprehensive context
+- **GPU Acceleration**: Auto-detect and use GPU for faster embedding and reranking
+- **Streaming Responses**: Real-time word-by-word LLM generation with cursor effect
+- **Dual Scoring**: View both distance and rerank scores for each source
+
+### Improved UX
+- **Friendly Names**: Books display with title-cased names instead of technical filenames
+- **Lottie Animations**: Smooth, modern UI with animated feedback
+- **Thorough Synthesis**: LLM instructed to synthesize information from ALL retrieved chunks
+- **Inline Citations**: [1], [2] format with comprehensive References section
 
 Try them all and see which works best for your queries!

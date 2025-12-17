@@ -3,7 +3,20 @@ Streamlit Frontend for Book RAG System
 """
 
 import streamlit as st
+from streamlit_lottie import st_lottie
+import requests
 from rag_backend import RAGBackend
+
+# Load Lottie animations
+def load_lottie_url(url: str):
+    """Load Lottie animation from URL."""
+    try:
+        r = requests.get(url)
+        if r.status_code != 200:
+            return None
+        return r.json()
+    except:
+        return None
 
 # Page config
 st.set_page_config(
@@ -22,6 +35,17 @@ def get_rag_backend():
     )
 
 backend = get_rag_backend()
+
+# Load Lottie animations (cached)
+@st.cache_data
+def get_animations():
+    """Load all Lottie animations."""
+    return {
+        'books': load_lottie_url('https://lottie.host/7f4c3b5e-8f3a-4c4e-9c4a-2b5e3f4c5d6e/4kF8K9mN7Q.json'),  # Book animation
+        'empty': load_lottie_url('https://assets9.lottiefiles.com/packages/lf20_2glqz0ia.json'),  # Empty state
+    }
+
+animations = get_animations()
 
 # Sidebar
 with st.sidebar:
@@ -79,6 +103,8 @@ with st.sidebar:
 
         st.session_state.selected_collections = selected_collections
     else:
+        if animations['empty']:
+            st_lottie(animations['empty'], height=150, key="empty_animation")
         st.info("No documents uploaded yet")
         st.session_state.selected_collections = []
 
@@ -97,8 +123,13 @@ if "selected_collections" not in st.session_state:
     st.session_state.selected_collections = []
 
 # Main app
-st.title("📚 Book RAG System")
-st.caption("Standalone RAG with ChromaDB, Sentence Transformers, and OpenRouter")
+col1, col2 = st.columns([4, 1])
+with col1:
+    st.title("📚 Book RAG System")
+    st.caption("Standalone RAG with ChromaDB, Sentence Transformers, and OpenRouter")
+with col2:
+    if animations['books']:
+        st_lottie(animations['books'], height=80, key="books_header")
 
 # Chat interface
 st.subheader("💬 Chat with your books")
@@ -154,7 +185,7 @@ if prompt := st.chat_input("Ask a question about your documents"):
                 sources = backend.retrieve_relevant_chunks(
                     prompt,
                     st.session_state.selected_collections,
-                    top_k=5,
+                    top_k=10,
                     rewrite_mode=rewrite_mode,
                     api_key=openrouter_api_key,
                     rewrite_model=openrouter_model,
@@ -175,43 +206,52 @@ if prompt := st.chat_input("Ask a question about your documents"):
                 st.error(f"Error retrieving context: {e}")
                 st.stop()
 
-        with st.spinner("Generating answer..."):
-            try:
-                # Generate answer
-                answer = backend.query_openrouter(
-                    prompt,
-                    context,
-                    openrouter_api_key,
-                    openrouter_model
-                )
+        # Generate answer with streaming
+        try:
+            # Create placeholder for streaming text
+            answer_placeholder = st.empty()
+            full_answer = ""
 
-                st.markdown(answer)
+            # Stream the response
+            for chunk in backend.query_openrouter(
+                prompt,
+                context,
+                openrouter_api_key,
+                openrouter_model,
+                collection_names=st.session_state.selected_collections,
+                stream=True
+            ):
+                full_answer += chunk
+                answer_placeholder.markdown(full_answer + "▌")  # Add cursor effect
 
-                # Show sources
-                with st.expander("📎 View Sources"):
-                    for i, source in enumerate(sources):
-                        score_info = f"Distance: {source['distance']:.3f}"
-                        if 'rerank_score' in source:
-                            score_info += f" | Rerank: {source['rerank_score']:.3f}"
-                        st.markdown(f"**Source #{i+1}** ({score_info})")
-                        st.text(source['text'][:500] + "...")
-                        st.markdown(f"*Page: {source['page_number']}*")
-                        st.markdown("---")
+            # Remove cursor and show final answer
+            answer_placeholder.markdown(full_answer)
 
-                # Save message
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": answer,
-                    "sources": sources
-                })
+            # Show sources
+            with st.expander("📎 View Sources"):
+                for i, source in enumerate(sources):
+                    score_info = f"Distance: {source['distance']:.3f}"
+                    if 'rerank_score' in source:
+                        score_info += f" | Rerank: {source['rerank_score']:.3f}"
+                    st.markdown(f"**Source #{i+1}** ({score_info})")
+                    st.text(source['text'][:500] + "...")
+                    st.markdown(f"*Page: {source['page_number']}*")
+                    st.markdown("---")
 
-            except Exception as e:
-                error_msg = str(e)
-                st.error(f"Error: {error_msg}")
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": f"⚠️ Error: {error_msg}"
-                })
+            # Save message
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": full_answer,
+                "sources": sources
+            })
+
+        except Exception as e:
+            error_msg = str(e)
+            st.error(f"Error: {error_msg}")
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": f"⚠️ Error: {error_msg}"
+            })
 
 # Styling
 st.markdown("""
@@ -223,6 +263,36 @@ st.markdown("""
         padding: 12px 16px;
         border-radius: 12px;
         margin-bottom: 8px;
+        animation: fadeIn 0.5s ease-in;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Lottie animation container styling */
+    div[data-testid="stLottie"] {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin: 10px 0;
+    }
+
+    /* Smooth transitions for all elements */
+    .stExpander, .stCheckbox, .stRadio {
+        transition: all 0.3s ease;
+    }
+
+    /* Hover effects */
+    .stCheckbox:hover, .stRadio:hover {
+        transform: translateX(5px);
     }
 </style>
 """, unsafe_allow_html=True)

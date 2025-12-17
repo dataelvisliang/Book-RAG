@@ -1,4 +1,5 @@
 streamlit
+streamlit-lottie
 requests
 pypdf
 sentence-transformers
