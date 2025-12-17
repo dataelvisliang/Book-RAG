@@ -355,4 +355,8 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ---
 
+**Live Demo**: [read-your-book.streamlit.app](https://read-your-book.streamlit.app)
+
+---
+
 **Built with ❤️ using Python, ChromaDB, and OpenRouter**
