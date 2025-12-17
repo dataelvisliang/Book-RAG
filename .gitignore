@@ -28,7 +28,7 @@ wheels/
 .env.local
 
 # Database
-*.db
+# Note: chroma_db is tracked to provide pre-built embeddings
 
 # Logs
 logs/
